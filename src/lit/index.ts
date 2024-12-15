@@ -9,8 +9,8 @@ import {
   generateAuthSig,
 } from "@lit-protocol/auth-helpers";
 
-import { getChainInfo, getEnv } from "./utils";
-import { litActionCode } from "./litAction";
+import { getChainInfo, getEnv } from "./utils.js";
+import { litActionCode } from "./litAction.js";
 
 const ETHEREUM_PRIVATE_KEY = getEnv("ETHEREUM_PRIVATE_KEY");
 const SELECTED_LIT_NETWORK = LIT_NETWORK.Datil;

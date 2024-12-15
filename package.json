@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "test": "npx @dotenvx/dotenvx run -- mocha test/**/*.spec.ts",
-   "start": "node src/index.js"
+    "start": "dotenvx run -- node src/index.js"
   },
   "devDependencies": {
     "@types/chai": "^4.3.16",
@@ -20,10 +21,15 @@
   },
   "dependencies": {
     "@dotenvx/dotenvx": "^0.44.1",
-    "@lit-protocol/auth-helpers": "^7.0.0-alpha.9",
+    "@lit-protocol/auth-helpers": "^6.11.3",
     "@lit-protocol/constants": "^7.0.0-alpha.9",
-    "@lit-protocol/contracts-sdk": "^7.0.0-alpha.9",
-    "@lit-protocol/lit-node-client": "^7.0.0-alpha.9",
-    "express": "^4.21.2"
+    "@lit-protocol/contracts-sdk": "^6.11.3",
+    "@lit-protocol/lit-node-client": "^6.11.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ethers": "5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0"
   }
 }
