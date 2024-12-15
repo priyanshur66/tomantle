@@ -2,11 +2,11 @@ import * as ethers from "ethers";
 import { LitContracts } from "@lit-protocol/contracts-sdk";
 import { LIT_NETWORK, LIT_RPC, LIT_ABILITY } from "@lit-protocol/constants";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { 
-    LitActionResource, 
-    LitPKPResource, 
-    createSiweMessageWithRecaps, 
-    generateAuthSig 
+import {
+    LitActionResource,
+    LitPKPResource,
+    createSiweMessageWithRecaps,
+    generateAuthSig
 } from "@lit-protocol/auth-helpers";
 import { getChainInfo, getEnv } from "./utils.js";
 import { litActionCode } from "./litAction.js";
@@ -24,20 +24,77 @@ const validateEnvironment = () => {
         'ETHEREUM_PRIVATE_KEY',
         'CHAIN_TO_SEND_TX_ON'
     ];
-    
+
     const missing = required.filter(key => !getEnv(key));
-    
+
     if (missing.length > 0) {
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
     }
 };
 
-export const signAndCombineAndSendTx = async () => {
+// create contract transaction
+const createContractTransaction = async (
+    contract,
+    functionName,
+    params,
+    pkpAddress,
+    chainInfo,
+    value = "0"
+) => {
+    try {
+        // Encode function data
+        const functionData = contract.interface.encodeFunctionData(functionName, params);
+
+        // Get gas price
+        const gasPrice = await contract.provider.getGasPrice();
+
+
+        const estimatedGas = await contract.estimateGas[functionName](...params, {
+            from: pkpAddress,
+            value: ethers.utils.parseEther(value)
+        });
+        const gasLimit = estimatedGas.mul(12).div(10);
+
+        // Get nonce
+        const nonce = await contract.provider.getTransactionCount(pkpAddress);
+
+
+        const unsignedTransaction = {
+            to: contract.address,
+            data: functionData,
+            value: ethers.utils.parseEther(value).toHexString(),
+            gasLimit: gasLimit.toHexString(),
+            gasPrice: gasPrice.toHexString(),
+            nonce: nonce,
+            chainId: chainInfo.chainId
+        };
+
+        console.log("Created unsigned transaction:", {
+            ...unsignedTransaction,
+            value: ethers.utils.formatEther(unsignedTransaction.value),
+            gasLimit: ethers.utils.formatUnits(unsignedTransaction.gasLimit, 0),
+            gasPrice: ethers.utils.formatUnits(unsignedTransaction.gasPrice, "gwei")
+        });
+
+        return unsignedTransaction;
+    } catch (error) {
+        console.error('Error creating contract transaction:', error);
+        throw error;
+    }
+};
+
+export const signAndExecuteContractTx = async (
+    contractAddress,
+    contractABI,
+    functionName,
+    functionParams,
+    valueInEther = "0"
+) => {
     let litNodeClient;
     let pkpInfo = {
         publicKey: LIT_PKP_PUBLIC_KEY,
     };
-    
+
     try {
         // Validate environment
         validateEnvironment();
@@ -49,17 +106,16 @@ export const signAndCombineAndSendTx = async () => {
         }
 
         // Initialize providers and wallets
-        const ethersWallet = new ethers.Wallet(
-            ETHEREUM_PRIVATE_KEY, 
-            new ethers.providers.JsonRpcProvider(chainInfo.rpcUrl)
-        );
-        
         const ethersProvider = new ethers.providers.JsonRpcProvider(chainInfo.rpcUrl);
-        
+        const ethersWallet = new ethers.Wallet(ETHEREUM_PRIVATE_KEY, ethersProvider);
+
         const yellowstoneEthersWallet = new ethers.Wallet(
-            ETHEREUM_PRIVATE_KEY, 
+            ETHEREUM_PRIVATE_KEY,
             new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE)
         );
+
+        // Initialize contract instance
+        const contract = new ethers.Contract(contractAddress, contractABI, ethersProvider);
 
         // Connect to Lit Contracts
         console.log("🔄 Connecting LitContracts client to network...");
@@ -70,15 +126,12 @@ export const signAndCombineAndSendTx = async () => {
         await litContracts.connect();
         console.log("✅ Connected LitContracts client to network");
 
-        // Handle PKP (Programmable Key Pair)
+        // Handle PKP setup
         if (!LIT_PKP_PUBLIC_KEY) {
             console.log("🔄 PKP wasn't provided, minting a new one...");
             const mintResult = await litContracts.pkpNftContractUtils.write.mint();
             pkpInfo = mintResult.pkp;
             console.log("✅ PKP successfully minted");
-            console.log(`ℹ️  PKP token ID: ${pkpInfo.tokenId}`);
-            console.log(`ℹ️  PKP public key: ${pkpInfo.publicKey}`);
-            console.log(`ℹ️  PKP ETH address: ${pkpInfo.ethAddress}`);
         } else {
             console.log(`ℹ️  Using provided PKP: ${LIT_PKP_PUBLIC_KEY}`);
             pkpInfo = {
@@ -91,25 +144,21 @@ export const signAndCombineAndSendTx = async () => {
         console.log(`🔄 Checking PKP balance...`);
         const bal = await ethersProvider.getBalance(pkpInfo.ethAddress);
         const formattedBal = ethers.utils.formatEther(bal);
-        
+
         if (Number(formattedBal) < Number(ethers.utils.formatEther(25000))) {
-            console.log(`ℹ️  PKP balance: ${formattedBal} is insufficient to run example`);
             console.log(`🔄 Funding PKP...`);
-            
             const fundingTx = {
-                to: "0x063145aa5f16FAD2C8179c1E0Ff1a1a39D95AF9d",
+                to: pkpInfo.ethAddress,
                 value: ethers.utils.parseEther("0.001"),
-                gasLimit: 21000,
+                gasLimit: ethers.BigNumber.from(21000).toHexString(),
                 gasPrice: (await ethersWallet.getGasPrice()).toHexString(),
                 nonce: await ethersProvider.getTransactionCount(ethersWallet.address),
                 chainId: chainInfo.chainId,
             };
-            
+
             const fundingTxPromise = await ethersWallet.sendTransaction(fundingTx);
-            const fundingTxReceipt = await fundingTxPromise.wait();
-            console.log(`✅ PKP funded. Transaction hash: ${fundingTxReceipt.transactionHash}`);
-        } else {
-            console.log(`✅ PKP has a sufficient balance of: ${formattedBal}`);
+            await fundingTxPromise.wait();
+            console.log(`✅ PKP funded`);
         }
 
         // Initialize Lit Node Client
@@ -119,50 +168,44 @@ export const signAndCombineAndSendTx = async () => {
             debug: process.env.NODE_ENV === 'development',
         });
         await litNodeClient.connect();
-        console.log("✅ Successfully connected to the Lit network");
+        console.log("✅ Connected to the Lit network");
 
-        // Create and serialize transaction
-        console.log("🔄 Creating and serializing unsigned transaction...");
-        const unsignedTransaction = {
-            to: ethersWallet.address,
-            value: 1,
-            gasLimit: 21000,
-            gasPrice: (await ethersWallet.getGasPrice()).toHexString(),
-            nonce: await ethersProvider.getTransactionCount(pkpInfo.ethAddress),
-            chainId: chainInfo.chainId,
-        };
-        
+        // Create contract transaction
+        console.log("🔄 Creating contract transaction...");
+        const unsignedTransaction = await createContractTransaction(
+            contract,
+            functionName,
+            functionParams,
+            pkpInfo.ethAddress,
+            chainInfo,
+            valueInEther
+        );
+
         const unsignedTransactionHash = ethers.utils.keccak256(
             ethers.utils.serializeTransaction(unsignedTransaction)
         );
-        console.log("✅ Transaction created and serialized");
+        console.log("✅ Contract transaction created");
 
         // Handle Capacity Credits
         let capacityTokenId = LIT_CAPACITY_CREDIT_TOKEN_ID;
         if (!capacityTokenId) {
-            console.log("🔄 No Capacity Credit provided, minting a new one...");
+            console.log("🔄 Minting new Capacity Credit...");
             const mintResult = await litContracts.mintCapacityCreditsNFT({
                 requestsPerKilosecond: 10,
                 daysUntilUTCMidnightExpiration: 1,
             });
             capacityTokenId = mintResult.capacityTokenIdStr;
-            console.log(`✅ Minted new Capacity Credit with ID: ${capacityTokenId}`);
-        } else {
-            console.log(`ℹ️  Using provided Capacity Credit with ID: ${capacityTokenId}`);
         }
 
         // Create capacity delegation auth signature
-        console.log("🔄 Creating capacityDelegationAuthSig...");
         const { capacityDelegationAuthSig } = await litNodeClient.createCapacityDelegationAuthSig({
             dAppOwnerWallet: ethersWallet,
             capacityTokenId,
             delegateeAddresses: [ethersWallet.address],
             uses: "1",
         });
-        console.log("✅ Capacity Delegation Auth Sig created");
 
-        // Execute Lit Action
-        console.log("🔄 Attempting to execute the Lit Action code...");
+        console.log("🔄 Executing Lit Action...");
         const result = await litNodeClient.executeJs({
             sessionSigs: await litNodeClient.getSessionSigs({
                 chain: CHAIN_TO_SEND_TX_ON,
@@ -203,13 +246,12 @@ export const signAndCombineAndSendTx = async () => {
             },
         });
 
-        console.log("✅ Lit Action code executed successfully");
-        console.log(result);
+        console.log("✅ Lit Action executed successfully");
         return result;
 
     } catch (error) {
-        console.error('Transaction Error:', error);
-        throw error; // Re-throw to be handled by API endpoint
+        console.error('Contract Transaction Error:', error);
+        throw error;
     } finally {
         if (litNodeClient) {
             try {
