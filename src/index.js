@@ -2,6 +2,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
+import explorerRoutes from './explorers/baseSepolia/index.js';
+import mantleExplorerRoutes from './explorers/mantle/index.js';
 import { signAndExecuteContractTx } from './lit/index.js';
 
 // Load environment variables
@@ -91,6 +93,12 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
+app.get('/', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -213,6 +221,9 @@ app.use((err, req, res, next) => {
     timestamp: new Date().toISOString()
   });
 });
+
+app.use('/explorer/baseSepolia', explorerRoutes);
+app.use('/explorer/mantle', mantleExplorerRoutes);
 
 // Start server
 app.listen(port, () => {
