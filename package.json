@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "npx @dotenvx/dotenvx run -- mocha test/**/*.spec.ts",
-    "start": "dotenvx run -- node src/index.js"
+    "start": "dotenvx run -- node src/index.js",
+    "build": "tsc"
   },
   "devDependencies": {
     "@types/chai": "^4.3.16",
@@ -30,6 +31,11 @@
     "ethers": "5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.4.1",
-    "helmet": "^8.0.0"
+    "helmet": "^8.0.0",
+    "bs58": "^5.0.0",
+    "date-and-time": "^2.4.1",
+    "multiformats": "^9.7.1",
+    "tslib": "^2.3.0",
+    "web-vitals": "^3.0.4"
   }
 }

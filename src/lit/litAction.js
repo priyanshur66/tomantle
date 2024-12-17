@@ -14,7 +14,10 @@ const _litActionCode = async () => {
     console.log("Recovered Address:", recoveredAddress);
     const response = await Lit.Actions.runOnce({ waitForResponse: true, name: "txnSender" }, async () => {
         try {
-            const rpcUrl = await Lit.Actions.getRpcUrl({ chain });
+            const rpcUrl = "https://rpc.sepolia.mantle.xyz"
+            if (chain === "baseSepolia") {
+                this.rpcUrl = "https://sepolia.base.org"
+            }
             const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
             const transactionReceipt = await provider.sendTransaction(signedTx);
             return `Transaction Sent Successfully. Transaction Hash: ${transactionReceipt.hash}`;
