@@ -26,6 +26,7 @@
     "@lit-protocol/constants": "^7.0.0-alpha.9",
     "@lit-protocol/contracts-sdk": "^6.11.3",
     "@lit-protocol/lit-node-client": "^6.11.3",
+    "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "ethers": "5",
