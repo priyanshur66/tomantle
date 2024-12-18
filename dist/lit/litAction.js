@@ -26,3 +26,4 @@ const _litActionCode = async () => {
     Lit.Actions.setResponse({ response });
 };
 export const litActionCode = `(${_litActionCode.toString()})();`;
+//# sourceMappingURL=litAction.js.map
